@@ -92,18 +92,6 @@ func (b *Builder) Build(targetClass string) (*build.Result, error) {
 		flags = append(flags, "--parallel")
 	}
 
-	args := append([]string{"testClasses"}, flags...)
-	cmd, err := buildGradleCommand(b.ProjectDir, args)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Debugf("Command: %s", cmd.String())
-	_, err = cmd.Output()
-	if err != nil {
-		return nil, cmdutils.WrapExecError(errors.WithStack(err), cmd)
-	}
-
 	deps, err := b.getDependencies()
 	if err != nil {
 		return nil, err
@@ -142,7 +130,7 @@ func (b *Builder) GradlePluginVersion() (string, error) {
 }
 
 func (b *Builder) getDependencies() ([]string, error) {
-	cmd, err := buildGradleCommand(b.ProjectDir, []string{"cifuzzPrintTestClasspath"})
+	cmd, err := buildGradleCommand(b.ProjectDir, []string{"cifuzzPrintTestClasspath", "-q"})
 	if err != nil {
 		return nil, err
 	}
