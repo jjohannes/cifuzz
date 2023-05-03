@@ -87,11 +87,6 @@ func (b *Builder) Build(targetClass string) (*build.Result, error) {
 	}
 	log.Debugf("Found gradle plugin version: %s", version)
 
-	var flags []string
-	if b.Parallel.Enabled {
-		flags = append(flags, "--parallel")
-	}
-
 	deps, err := b.getDependencies()
 	if err != nil {
 		return nil, err
