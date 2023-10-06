@@ -206,7 +206,7 @@ Bazel C/C++ projects are currently not supported on Windows.
 
 - Java JDK >= 8 (1.8) (e.g. [OpenJDK](https://openjdk.java.net/install/) or
   [Zulu](https://www.azul.com/downloads/zulu-community/))
-- [Maven](https://maven.apache.org/install.html)
+- [Maven](https://maven.apache.org/install.html) >= 3.3.1
 
 **Ubuntu / Debian**
 

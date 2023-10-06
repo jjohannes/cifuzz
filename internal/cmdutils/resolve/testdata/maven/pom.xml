@@ -9,6 +9,10 @@
 	<artifactId>maven-example</artifactId>
 	<version>1.0-SNAPSHOT</version>
 
+	<properties>
+		<cifuzz.fuzztests>true</cifuzz.fuzztests>
+	</properties>
+
 	<build>
 		<testSourceDirectory>src/test</testSourceDirectory>
 	</build>

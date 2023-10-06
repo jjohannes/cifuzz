@@ -317,7 +317,10 @@ func (c *coverageCmd) run() error {
 		if c.opts.BuildSystem == config.BuildSystemGradle {
 			deps, err = gradle.GetDependencies(c.opts.ProjectDir)
 		} else {
-			deps, err = maven.GetDependencies(c.opts.ProjectDir, c.opts.buildStderr)
+			deps, err = maven.GetDependencies(c.opts.ProjectDir, maven.ParallelOptions{
+				Enabled: viper.IsSet("build-jobs"),
+				NumJobs: c.opts.NumBuildJobs,
+			})
 		}
 		if err != nil {
 			return err

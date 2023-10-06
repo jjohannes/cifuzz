@@ -1,12 +1,11 @@
 package maven
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -16,6 +15,13 @@ import (
 	"code-intelligence.com/cifuzz/pkg/log"
 	"code-intelligence.com/cifuzz/pkg/runfiles"
 	"code-intelligence.com/cifuzz/util/fileutil"
+)
+
+var (
+	classpathRegex         = regexp.MustCompile("(?m)^cifuzz.test.classpath=(?P<classpath>.*)$")
+	buildDirRegex          = regexp.MustCompile("(?m)^cifuzz.buildDir=(?P<buildDir>.*)$")
+	testSourceFoldersRegex = regexp.MustCompile("(?m)^cifuzz.test.source-folders=(?P<testSourceFolders>.*)$")
+	mainSourceFoldersRegex = regexp.MustCompile("(?m)^cifuzz.main.source-folders=(?P<mainSourceFolders>.*)$")
 )
 
 type ParallelOptions struct {
@@ -59,24 +65,7 @@ func NewBuilder(opts *BuilderOptions) (*Builder, error) {
 }
 
 func (b *Builder) Build() (*build.BuildResult, error) {
-	var flags []string
-	if b.Parallel.Enabled {
-		flags = append(flags, "-T")
-		if b.Parallel.NumJobs != 0 {
-			flags = append(flags, fmt.Sprint(b.Parallel.NumJobs))
-		} else {
-			// Use one thread per cpu core
-			flags = append(flags, "1C")
-		}
-	}
-	args := append(flags, "test-compile")
-
-	err := runMaven(b.ProjectDir, args, b.Stderr, b.Stderr)
-	if err != nil {
-		return nil, err
-	}
-
-	deps, err := GetDependencies(b.ProjectDir, b.Stderr)
+	deps, err := GetDependencies(b.ProjectDir, b.Parallel)
 	if err != nil {
 		return nil, err
 	}
@@ -90,96 +79,27 @@ func (b *Builder) Build() (*build.BuildResult, error) {
 	return result, nil
 }
 
-func getExternalDependencies(projectDir string, stderr io.Writer) ([]string, error) {
-	tempDir, err := os.MkdirTemp("", "cifuzz-maven-dependencies-*")
+func GetDependencies(projectDir string, parallel ParallelOptions) ([]string, error) {
+	var flags []string
+	if parallel.Enabled {
+		flags = append(flags, "-T")
+		if parallel.NumJobs != 0 {
+			flags = append(flags, fmt.Sprint(parallel.NumJobs))
+		} else {
+			// Use one thread per cpu core
+			flags = append(flags, "1C")
+		}
+	}
+
+	args := append(flags, "test-compile", "-DcifuzzPrintTestClasspath")
+	cmd := runMaven(projectDir, args)
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	defer fileutil.Cleanup(tempDir)
-
-	outputPath := filepath.Join(tempDir, "cp")
-	outputFlag := "-Dmdep.outputFile=" + outputPath
-
-	args := []string{
-		"dependency:build-classpath",
-		outputFlag,
+		return nil, cmdutils.WrapExecError(errors.WithStack(err), cmd)
 	}
 
-	err = runMaven(projectDir, args, stderr, stderr)
-	if err != nil {
-		return nil, err
-	}
-
-	output, err := os.ReadFile(outputPath)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	deps := strings.Split(strings.TrimSpace(string(output)), string(os.PathListSeparator))
-	return deps, nil
-}
-
-func runMaven(projectDir string, args []string, stdout, stderr io.Writer) error {
-	// always run it with the cifuzz profile
-	args = append(args, "-Pcifuzz")
-	// remove color from output
-	args = append(args, "-B")
-	cmd := exec.Command(
-		"mvn",
-		args...,
-	)
-	// Redirect the command's stdout to stderr to only have
-	// reports printed to stdout
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	cmd.Dir = projectDir
-	log.Debugf("Working directory: %s", cmd.Dir)
-	log.Debugf("Command: %s", cmd.String())
-	err := cmd.Run()
-	if err != nil {
-		return cmdutils.WrapExecError(errors.WithStack(err), cmd)
-	}
-
-	return nil
-}
-
-func parsePomXML(projectDir string) (*Project, error) {
-	args := []string{
-		"help:evaluate",
-		"-Dexpression=project",
-		"-DforceStdout",
-		"--quiet",
-	}
-	stdout := new(bytes.Buffer)
-	err := runMaven(projectDir, args, stdout, stdout)
-	if err != nil {
-		return nil, err
-	}
-
-	project, err := parseXML(stdout)
-	if err != nil {
-		return nil, err
-	}
-
-	return project, nil
-}
-
-func GetDependencies(projectDir string, stderr io.Writer) ([]string, error) {
-	project, err := parsePomXML(projectDir)
-	if err != nil {
-		return nil, err
-	}
-
-	deps, err := getExternalDependencies(projectDir, stderr)
-	if err != nil {
-		return nil, err
-	}
-	// Append local dependencies which are not listed by "mvn dependency:build-classpath"
-	// These directories are configurable
-	deps = append(deps, []string{
-		project.Build.OutputDirectory,
-		project.Build.TestOutputDirectory,
-	}...)
+	classpath := classpathRegex.FindStringSubmatch(string(output))
+	deps := strings.Split(strings.TrimSpace(classpath[1]), string(os.PathListSeparator))
 
 	// Add jacoco cli and java agent JAR paths
 	cliJarPath, err := runfiles.Finder.JacocoCLIJarPath()
@@ -191,26 +111,56 @@ func GetDependencies(projectDir string, stderr io.Writer) ([]string, error) {
 		return nil, err
 	}
 	deps = append(deps, cliJarPath, agentJarPath)
-
 	return deps, nil
 }
 
-// GetTestDir returns the value of <testSourceDirectory> from the projects
-// pom.xml as an absolute path.
-// Note: If no tag is specified, the parser will return the
-// default value "projectDir/src/test/java".
-func GetTestDir(projectDir string) (string, error) {
-	project, err := parsePomXML(projectDir)
+func runMaven(projectDir string, args []string) *exec.Cmd {
+	// remove color and transfer progress from output
+	args = append(args, "-B", "--no-transfer-progress")
+	cmd := exec.Command("mvn", args...) // TODO find ./mvnw if available (unify with MavenRunner in coverage.go)
+	cmd.Dir = projectDir
+
+	log.Debugf("Working directory: %s", cmd.Dir)
+	log.Debugf("Command: %s", cmd.String())
+
+	return cmd
+}
+
+func GetBuildDirectory(projectDir string) (string, error) {
+	cmd := runMaven(projectDir, []string{"validate", "-q", "-DcifuzzPrintBuildDir"})
+	output, err := cmd.Output()
 	if err != nil {
-		return "", errors.WithMessagef(err, "Failed to get test directory of project")
+		return "", cmdutils.WrapExecError(errors.WithStack(err), cmd)
 	}
 
-	testDir := strings.TrimSpace(project.Build.TestSourceDirectory)
+	result := buildDirRegex.FindStringSubmatch(string(output))
+	if result == nil {
+		return "", errors.New("Unable to parse maven build directory.")
+	}
+	buildDir := strings.TrimSpace(result[1])
+
+	return buildDir, nil
+}
+
+// GetTestDir returns the value of <testSourceDirectory> for the fuzz project
+// (which may be one of the sub-modules in a multi-project)
+func GetTestDir(projectDir string) (string, error) {
+	cmd := runMaven(projectDir, []string{"validate", "-q", "-DcifuzzPrintTestSourceFolders"})
+	output, err := cmd.Output()
+	if err != nil {
+		return "", cmdutils.WrapExecError(errors.WithStack(err), cmd)
+	}
+
+	result := testSourceFoldersRegex.FindStringSubmatch(string(output))
+	if result == nil {
+		return "", errors.New("Unable to parse maven test sources.")
+	}
+	testDir := strings.TrimSpace(result[1])
 	log.Debugf("Found Maven test source at: %s", testDir)
 
 	exists, err := fileutil.Exists(testDir)
 	if err != nil {
-		return "", errors.WithMessagef(err, "Error checking if Maven test directory %s exists", testDir)
+		return "", err
 	}
 	if exists {
 		return testDir, nil
@@ -220,17 +170,20 @@ func GetTestDir(projectDir string) (string, error) {
 	return "", nil
 }
 
-// GetSourceDir returns the value of <sourceDirectory> from the projects
-// pom.xml as an absolute path.
-// Note: If no tag is specified, the parser will return the
-// default value "projectDir/src/main/java".
+// GetSourceDir returns the value of <sourceDirectory> for the fuzz project
+// (which may be one of the sub-modules in a multi-project)
 func GetSourceDir(projectDir string) (string, error) {
-	project, err := parsePomXML(projectDir)
+	cmd := runMaven(projectDir, []string{"validate", "-q", "-DcifuzzPrintMainSourceFolders"})
+	output, err := cmd.Output()
 	if err != nil {
 		return "", errors.WithMessagef(err, "Failed to get source directory of project")
 	}
 
-	sourceDir := strings.TrimSpace(project.Build.SourceDirectory)
+	result := mainSourceFoldersRegex.FindStringSubmatch(string(output))
+	if result == nil {
+		return "", errors.New("Unable to parse maven main sources.")
+	}
+	sourceDir := strings.TrimSpace(result[1])
 	log.Debugf("Found Maven source at: %s", sourceDir)
 
 	exists, err := fileutil.Exists(sourceDir)

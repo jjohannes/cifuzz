@@ -1,20 +1,17 @@
-Please make sure to add the following dependency to your
-pom.xml to enable fuzz testing:
+Apply the CI Fuzz Maven extension to your Maven project by adding the following configuration block to your `.mvn/extensions.xml` file:
 
-    <dependency>
-      <groupId>com.code-intelligence</groupId>
-      <artifactId>jazzer-junit</artifactId>
-      <version>0.21.1</version>
-      <scope>test</scope>
-    </dependency>
+    <extensions>
+      <extension>
+        <groupId>com.code-intelligence</groupId>
+        <artifactId>cifuzz-maven-extension</artifactId>
+        <version>1.0.0-rc2</version>
+      </extension>
+    </extensions>
 
-We highly recommend using cifuzz with JUnit >=5 to ensure
-easy IDE integration. You can add it with the following
-dependency to your pom.xml:
+In a **multi-project**, you have to mark the project that contains the fuzz tests by setting the `cifuzz.fuzztests` property in the `<project-folder>/pom.xml`:
 
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-engine</artifactId>
-      <version>5.9.2</version>
-      <scope>test</scope>
-    </dependency>
+    <properties>
+      <cifuzz.fuzztests>true</cifuzz.fuzztests>
+    </properties>
+
+By default, the `cifuzz.yaml` should be located in the root of your Maven project.
