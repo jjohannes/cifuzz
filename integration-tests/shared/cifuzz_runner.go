@@ -108,6 +108,7 @@ func (r *CIFuzzRunner) Command(t *testing.T, command string, opts *CommandOption
 	return stdErrOutput
 }
 
+// FilterForInstructions returns all indented lines.
 func FilterForInstructions(lines []string) []string {
 	var linesToAdd []string
 	for _, line := range lines {
@@ -118,12 +119,40 @@ func FilterForInstructions(lines []string) []string {
 	return linesToAdd
 }
 
+// FilterForInstructionBlocks returns blocks of indented lines.
+func FilterForInstructionBlocks(lines []string) [][]string {
+	var blocks [][]string
+	inBlock := false
+	currBlock := []string{}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "    ") {
+			inBlock = true
+			currBlock = append(currBlock, line)
+		} else {
+			if inBlock {
+				blocks = append(blocks, currBlock)
+				currBlock = []string{}
+			}
+			inBlock = false
+		}
+	}
+	return blocks
+}
+
 // CommandWithFilterForInstructions runs "cifuzz <command> <args>" and
 // returns any indented lines which the command prints to stderr
 // (which we expect to be lines which should be added to some source or config file).
 func (r *CIFuzzRunner) CommandWithFilterForInstructions(t *testing.T, command string, opts *CommandOptions) []string {
 	allLines := r.Command(t, command, opts)
 	return FilterForInstructions(allLines)
+}
+
+// CommandWithFilterForInstructionBlocks runs "cifuzz <command> <args>" and
+// returns blocks of indented lines which the command prints to stderr
+// (which we expect to be lines which should be added to some source or config file).
+func (r *CIFuzzRunner) CommandWithFilterForInstructionBlocks(t *testing.T, command string, opts *CommandOptions) [][]string {
+	allLines := r.Command(t, command, opts)
+	return FilterForInstructionBlocks(allLines)
 }
 
 type RunOptions struct {
