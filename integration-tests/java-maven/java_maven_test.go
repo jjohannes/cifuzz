@@ -47,14 +47,28 @@ func TestIntegration_Maven(t *testing.T) {
 		DefaultFuzzTest: "com.example.FuzzTestCase::myFuzzTest",
 	}
 
-	// Execute the init command and include the dependencies listed in the instructions
-	linesToAdd := cifuzzRunner.CommandWithFilterForInstructions(t, "init", nil)
+	// Execute the init command
+	// The instructions file for maven includes a snippet we need to add to the .mvn/extensions.xml file.
+	blocks := cifuzzRunner.CommandWithFilterForInstructionBlocks(t, "init", nil)
+
+	extensionLinesToAdd := blocks[0]
+	pomLinesToAdd := blocks[1]
+
+	// create the .mvn directory with the extensions.xml file if it doesn't exist
+	err := os.MkdirAll(filepath.Join(projectDir, ".mvn"), 0o755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(projectDir, ".mvn", "extensions.xml"), []byte(""), 0o644)
+	require.NoError(t, err)
+
 	assert.FileExists(t, filepath.Join(projectDir, "cifuzz.yaml"))
+
+	shared.AppendLines(t, filepath.Join(projectDir, ".mvn", "extensions.xml"), extensionLinesToAdd)
+
 	shared.AddLinesToFileAtBreakPoint(t,
 		filepath.Join(projectDir, "pom.xml"),
-		linesToAdd,
-		"\t</dependencies>",
-		false,
+		pomLinesToAdd[1:len(pomLinesToAdd)-1],
+		"\t<properties>",
+		true,
 	)
 
 	// Execute the create command
@@ -65,7 +79,7 @@ func TestIntegration_Maven(t *testing.T) {
 		"com",
 		"example",
 	)
-	err := os.MkdirAll(filepath.Join(projectDir, testDir), 0o755)
+	err = os.MkdirAll(filepath.Join(projectDir, testDir), 0o755)
 	require.NoError(t, err)
 	outputPath := filepath.Join(testDir, "FuzzTestCase.java")
 	cifuzzRunner.CommandWithFilterForInstructions(t, "create", &shared.CommandOptions{
