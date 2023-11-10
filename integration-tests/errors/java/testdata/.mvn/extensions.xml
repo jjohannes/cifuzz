@@ -1,0 +1,7 @@
+<extensions>
+	<extension>
+		<groupId>com.code-intelligence</groupId>
+		<artifactId>cifuzz-maven-extension</artifactId>
+		<version>1.0.0-rc2</version>
+	</extension>
+</extensions>

@@ -13,23 +13,15 @@
 	<artifactId>util</artifactId>
 	<name>util</name>
 
+	<properties>
+		<cifuzz.fuzztests>true</cifuzz.fuzztests>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-lang3</artifactId>
 			<version>3.6</version>
-		</dependency>
-		<dependency>
-			<groupId>com.code-intelligence</groupId>
-			<artifactId>jazzer-junit</artifactId>
-			<version>0.21.1</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter-engine</artifactId>
-			<version>5.9.2</version>
-			<scope>test</scope>
 		</dependency>
 	</dependencies>
 </project>
