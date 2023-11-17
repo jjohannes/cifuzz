@@ -26,7 +26,7 @@ var initTests = &[]e2e.TestCase{
 		Assert: func(t *testing.T, output e2e.CommandOutput) {
 			assert.EqualValues(t, 0, output.ExitCode)
 			assert.Contains(t, output.Stdall, "Configuration saved in cifuzz.yaml")
-			assert.Contains(t, output.Stdall, "<artifactId>jazzer-junit</artifactId>")
+			assert.Contains(t, output.Stdall, "<artifactId>cifuzz-maven-extension</artifactId>")
 			assert.NotContains(t, output.Stdall, "Failed to create config")
 			output.FileExists("cifuzz.yaml")
 		},
