@@ -350,7 +350,7 @@ func testBundle(t *testing.T, dir string, cifuzz string, args ...string) {
 	jarPattern := filepath.Join(archiveDir, "runtime_deps", "*.jar")
 	jarMatches, err := zglob.Glob(jarPattern)
 	require.NoError(t, err)
-	assert.Equal(t, 13, len(jarMatches))
+	assert.Len(t, jarMatches, 13, "Unexpected number of jars")
 
 	classPattern := filepath.Join(archiveDir, "runtime_deps", "**", "*.class")
 	classMatches, err := zglob.Glob(classPattern)
