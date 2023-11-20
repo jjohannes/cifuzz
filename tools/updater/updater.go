@@ -46,22 +46,26 @@ func main() {
 		for _, path := range paths {
 			updateFile(path, *version, re)
 		}
-	case "jazzer":
-		re := regexp.MustCompile(`(<artifactId>jazzer-junit<\/artifactId>\s*<version>)(?P<version>\d+.\d+.\d+.*)(<\/version>)`)
+	case "maven-extension":
+		re := regexp.MustCompile(`(<artifactId>cifuzz-maven-extension<\/artifactId>\s*<version>)(?P<version>\d+.\d+.\d+.*)(<\/version>)`)
 		paths := []string{
-			"examples/maven/pom.xml",
-			"integration-tests/errors/java/testdata/pom.xml",
-			"integration-tests/errors/java/testdata-sql-ldap/pom.xml",
-			"integration-tests/java-maven-spring/testdata/pom.xml",
-			"internal/bundler/testdata/jazzer/maven/pom.xml",
+			"integration-tests/java-maven-spring/testdata/.mvn/extensions.xml",
+			"integration-tests/errors/java/testdata/.mvn/extensions.xml",
+			"integration-tests/errors/java/testdata-sql-ldap/.mvn/extensions.xml",
+			"examples/maven-multi/.mvn/extensions.xml",
+			"examples/maven/.mvn/extensions.xml",
+			"test/projects/maven/.mvn/extensions.xml",
+			"internal/bundler/testdata/jazzer/maven/.mvn/extensions.xml",
+			"internal/cmdutils/resolve/testdata/maven/.mvn/extensions.xml",
+			"internal/build/java/maven/testdata/.mvn/extensions.xml",
 			"pkg/messaging/instructions/maven",
-			"test/projects/maven/tests/pom.xml",
-			"test/projects/maven/util/pom.xml",
-			"tools/list-fuzz-tests/pom.xml",
 		}
 		for _, path := range paths {
 			updateFile(path, *version, re)
 		}
+	case "jazzer":
+		re := regexp.MustCompile(`(<artifactId>jazzer-junit<\/artifactId>\s*<version>)(?P<version>\d+.\d+.\d+.*)(<\/version>)`)
+		updateFile("tools/list-fuzz-tests/pom.xml", *version, re)
 	case "jazzerjs":
 		updateJazzerNpm("examples/nodejs", *version)
 		updateJazzerNpm("examples/nodejs-typescript", *version)
